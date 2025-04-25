@@ -70,38 +70,36 @@ Um die **optionalen Funktionen 'Link teilen' und 'Einbetten'** zu aktivieren, m�
    * Führen Sie das folgende SQL-Skript aus. Es erstellt die notwendige Tabelle `gantt_shares` und aktiviert die empfohlenen Row Level Security (RLS) Policies für anonymes Teilen:
 
    ```sql
-   -- Tabelle erstellen, um geteilte Gantt-Daten zu speichern
-   CREATE TABLE public.gantt_shares (
-     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-     created_at timestamp with time zone DEFAULT now() NOT NULL,
-     -- Speichert das serialisierte Gantt-Objekt { data: [], links: [] }
-     gantt_data jsonb NULL
-   );
+  CREATE TABLE public.gantt_shares (
+  id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  -- Stores the actual Gantt data object { data: [], links: [] }
+  gantt_data jsonb NULL
+);
 
-   -- Optional: Index für schnellere Suche nach ID hinzufügen
-   CREATE INDEX gantt_shares_id_idx ON public.gantt_shares USING btree (id);
+-- Optional: Add database index for faster lookups by id
+CREATE INDEX gantt_shares_id_idx ON public.gantt_shares USING btree (id);
 
-   -- WICHTIG: Row Level Security (RLS) für die Tabelle aktivieren
-   ALTER TABLE public.gantt_shares ENABLE ROW LEVEL SECURITY;
+-- **IMPORTANT: Row Level Security (RLS)**
+-- Enable RLS on the table
+ALTER TABLE public.gantt_shares ENABLE ROW LEVEL SECURITY;
 
-   -- Policies erstellen:
-   -- 1. Erlaube jedem (anon-Rolle), neue Zeilen einzufügen (notwendig zum Speichern für Teilen/Einbetten)
-   --    SICHERHEITSHINWEIS: Erlaubt potenzielles Füllen der Datenbank.
-   --    Nutzung überwachen oder Rate Limiting / Authentifizierung für Produktionsumgebungen erwägen.
-   CREATE POLICY "Allow public insert access" ON public.gantt_shares
-     FOR INSERT
-     WITH CHECK (true);
+-- Create policies:
+-- 1. Allow anyone (anon role) to read rows (needed to load shared charts)
+CREATE POLICY "Allow public read access" ON public.gantt_shares
+  FOR SELECT USING (true);
 
-   -- 2. Erlaube jedem (anon-Rolle), Zeilen zu lesen (notwendig zum Laden via geteiltem Link/ID)
-   --    SICHERHEITSHINWEIS: Basiert auf der Unwahrscheinlichkeit, UUIDs zu erraten. Theoretisch sind alle Zeilen lesbar.
-   CREATE POLICY "Allow public read access" ON public.gantt_shares
-     FOR SELECT
-     USING (true);
+-- 2. Allow anyone (anon role) to insert new rows (needed to save charts for sharing)
+--    !! SECURITY NOTE: This allows anyone to potentially fill up your database.
+--    !! For production, you'd likely want to restrict inserts,
+--    !! e.g., require authentication or add rate limiting via Edge Functions.
+CREATE POLICY "Allow public insert access" ON public.gantt_shares
+  FOR INSERT WITH CHECK (true);
 
-   -- Sicherstellen, dass die anon-Rolle die Basis-Rechte hat (normalerweise Standard)
-   GRANT SELECT, INSERT ON TABLE public.gantt_shares TO anon;
-   -- Explizit unnötige Berechtigungen entziehen (optional, aber empfohlen)
-   REVOKE UPDATE, DELETE ON TABLE public.gantt_shares FROM anon;
+-- Ensure the policies are applied to the anon role if necessary (usually default)
+-- GRANT SELECT ON TABLE public.gantt_shares TO anon;
+-- GRANT INSERT ON TABLE public.gantt_shares TO anon;
+```
 
 **4. HTML-Datei konfigurieren:**
 
